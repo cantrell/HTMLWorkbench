@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+
+<html>
+
+<style>
+
+    body
+    {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-weight: 300;
+        font-size: 15px;
+    }
+
+    #screen
+    {
+        position: absolute;
+        border: 0;
+        -webkit-box-shadow: 0 0 100px #888;
+    }
+
+    #alphaRange, #betaRange, #gammaRange
+    {
+        width: 200px;
+    }
+    
+    .tr    {display: table-row;}
+    .td    {display: table-cell; padding-right: 8px;}
+
+    #validationResults {width:190px}
+
+    .shade
+    {
+        -webkit-transition-property: opacity, height;
+        -webkit-transition-duration: .5s, .5s;
+        opacity: 0;
+        height: 0;
+        overflow: hidden;
+    }
+
+    #reloadingNotification
+    {
+        font-size: 80px;
+        color: #333;
+        float: right;
+        opacity: 0;
+        -webkit-transition: opacity .75s ease-in;
+        padding-right: 10px;
+    }
+
+</style>
+
+<head>
+
+<script type="text/javascript">
+
+    var ORIENTATION_INTERVAL = 50;
+
+    var screenProps = {
+        currentRotation: 0,
+        currentRotationDisplay: 0
+    };
+
+    var intervals = {orientationInterval: -1};
+
+    function init()
+    {
+        onResizeScreen(id('devices').options[0].value);
+        positionScreen();
+        id('screen').addEventListener('load', screenInit);
+        loadMobileApp();
+        setRotationTransition();
+        window.addEventListener('keydown', onKeyDown);
+        id('reloadingNotification').addEventListener('webkitTransitionEnd', function() {id('reloadingNotification').style.opacity = 0;});
+    }
+
+    function onKeyDown(event)
+    {
+        if (event.keyCode == 82 && event.metaKey)
+        {
+            event.preventDefault();
+            id('reloadingNotification').style.opacity = 1;
+            loadMobileApp();
+        }
+    }
+
+    function screenInit()
+    {
+        getMobileAppWindow().orientation = 0;
+    }
+
+    function loadMobileApp()
+    {
+        // TODO: Hardcode to index.html
+        getMobileAppWindow().location.href = 'index.html';
+    }
+
+    function setRotationTransition()
+    {
+        var screen = id('screen');
+        screen.style['-webkit-transition'] = '-webkit-transform .5s ease-out';
+        screen.addEventListener('webkitTransitionEnd', onRotationComplete);
+    }
+
+    function removeRotationTransition()
+    {
+        var screen = id('screen');
+        screen.style.removeProperty('-webkit-transition');
+        screen.removeEventListener('webkitTransitionEnd', onRotationComplete);
+    }
+
+    function onRotate()
+    {
+        screenProps.currentRotation += 90;
+        var screen = id('screen').style.webkitTransform = 'rotate(90deg)';
+        var multiplier = Math.floor(screenProps.currentRotation / 360);
+        screenProps.currentRotationDisplay = screenProps.currentRotation - (360 * multiplier);
+        if (screenProps.currentRotationDisplay == 270) screenProps.currentRotationDisplay = -90;
+        id('screenRotationLabel').innerHTML = screenProps.currentRotationDisplay + '&deg;';
+    }
+
+    function onRotationComplete()
+    {
+        removeRotationTransition();
+        invertScreenDimensions();
+        resizeScreen();
+        id('screen').style.webkitTransform = 'rotate(0deg)';
+        positionScreen();
+        setTimeout(dispatchOrientationChangeEvent, 1);
+        setTimeout(setRotationTransition, 1);
+    }
+
+    function dispatchOrientationChangeEvent()
+    {
+        var mobileApp = getMobileAppWindow();
+        // TODO
+        //mobileApp.orientation = screenProps.currentRotationDisplay;
+        var orientationChangeEvent = mobileApp.document.createEvent('Event');
+        orientationChangeEvent.initEvent('orientationchange', true, true);
+        mobileApp.dispatchEvent(orientationChangeEvent);
+    }
+
+    function onResizeScreen(val)
+    {
+        if (val == -1) return;
+        screenProps.dimensions = JSON.parse(val);
+        //if (Math.abs(screenProps.currentRotationDisplay) == 90) invertScreenDimensions();
+        resizeScreen();
+        positionScreen();
+        screenProps.currentRotation = 0;
+        screenProps.currentRotationDisplay = 0;
+        id('screenRotationLabel').innerHTML = screenProps.currentRotationDisplay + '&deg;';
+        loadMobileApp();
+    }
+
+    function resizeScreen(w, h)
+    {
+        id('screen').width = (w) ? w :  screenProps.dimensions.w;
+        id('screen').height = (h) ? h : screenProps.dimensions.h;
+    }
+
+    function invertScreenDimensions()
+    {
+        var newWidth = screenProps.dimensions.h;
+        var newHeight = screenProps.dimensions.w;
+        screenProps.dimensions = {w:newWidth, h:newHeight};
+    }
+
+    function positionScreen()
+    {
+        id('screen').style.top = (window.innerHeight / 2) - (screenProps.dimensions.h / 2) + 'px';
+        id('screen').style.left = (window.innerWidth / 2) - (screenProps.dimensions.w / 2) + 'px';
+    }
+
+    function onToggleOrientation(val)
+    {
+        if (val)
+        {
+            intervals.orientationInterval = setInterval(simulateOrientation, ORIENTATION_INTERVAL);
+            id('orientationControls').style.opacity = 1;
+            id('orientationControls').style.height = '70px';
+        }
+        else
+        {
+            if (intervals.orientationInterval != -1) clearInterval(intervals.orientationInterval);
+            id('orientationControls').style.opacity = 0;
+            id('orientationControls').style.height = '0';
+        }
+    }
+
+    function simulateOrientation()
+    {
+        var mobileApp = getMobileAppWindow();
+        var deviceOrientationEvent = mobileApp.document.createEvent('Event');
+        deviceOrientationEvent.initEvent('deviceorientation', true, true);
+        deviceOrientationEvent.alpha = id('alphaRange').value;
+        deviceOrientationEvent.beta  = id('betaRange').value;
+        deviceOrientationEvent.gamma = id('gammaRange').value;
+        deviceOrientationEvent.webkitCompassHeading = (360 - deviceOrientationEvent.alpha);
+        // TBD
+        mobileApp.dispatchEvent(deviceOrientationEvent);
+    }
+
+    function updateAlpha(val) { id('alphaLabel').innerHTML = val + '&deg;'; }
+    function updateBeta(val) { id('betaLabel').innerHTML = (val - 180) + '&deg;'; }
+    function updateGamma(val) { id('gammaLabel').innerHTML = (val - 90) + '&deg;'; }
+
+    function onValidate()
+    {
+        id('validateButton').innerHTML = 'Restart';
+        var appWin = getMobileAppWindow();
+
+        var good = '&#10003;';
+        var bad = '&#10007;';
+
+        // Manifest file
+        var manifestFile = appWin.document.getElementsByTagName('html')[0].getAttribute('manifest');
+        id('manifestFileResult').innerHTML = (!manifestFile) ? bad : good;
+
+        // META tags
+        var metaTags = appWin.document.getElementsByTagName('meta');
+        id('webAppMetaTagResult').innerHTML = bad;
+        id('viewPortMetaTagResult').innerHTML = bad;
+        id('statusBarMetaTagResult').innerHTML = bad;
+        for (var i = 0; i < metaTags.length; ++i)
+        {
+            if (metaTags[i].getAttribute('name') == 'apple-mobile-web-app-capable')
+            {
+                id('webAppMetaTagResult').innerHTML = good; continue;
+            }
+            else if (metaTags[i].getAttribute('name') == 'viewport')
+            {
+                id('viewPortMetaTagResult').innerHTML = good; continue;
+            }
+            else if (metaTags[i].getAttribute('name') == 'apple-mobile-web-app-status-bar-style')
+            {
+                id('statusBarMetaTagResult').innerHTML = good; continue;
+            }
+        }
+
+        var linkTags = appWin.document.getElementsByTagName('link');
+        id('icon57Result').innerHTML              = bad;
+        id('icon72Result').innerHTML              = bad;
+        id('icon114Result').innerHTML             = bad;
+        id('ipadStartUpImageResult').innerHTML    = bad;
+        id('iphone3StartUpImageResult').innerHTML = bad;
+        id('iphone4StartUpImageResult').innerHTML = bad;
+        id('faviconResult').innerHTML             = bad;
+        for (var i = 0; i < linkTags.length; ++i)
+        {
+            if (linkTags[i].getAttribute('rel') == 'apple-touch-icon' && linkTags[i].getAttribute('sizes') == '57x57')
+            {
+                id('icon57Result').innerHTML = good; continue;
+            }
+            else if (linkTags[i].getAttribute('rel') == 'apple-touch-icon' && linkTags[i].getAttribute('sizes') == '72x72')
+            {
+                id('icon72Result').innerHTML = good; continue;
+            }
+            else if (linkTags[i].getAttribute('rel') == 'apple-touch-icon' && linkTags[i].getAttribute('sizes') == '114x114')
+            {
+                id('icon114Result').innerHTML = good; continue;
+            }
+            else if (linkTags[i].getAttribute('rel') == 'apple-touch-startup-image' && linkTags[i].getAttribute('media').indexOf('481') != -1 && linkTags[i].getAttribute('media').indexOf('1024') != -1)
+            {
+                id('ipadStartUpImageResult').innerHTML = good; continue;
+            }
+            else if (linkTags[i].getAttribute('rel') == 'apple-touch-startup-image' && linkTags[i].getAttribute('media').indexOf('320') != -1)
+            {
+                id('iphone3StartUpImageResult').innerHTML = good; continue;
+            }
+            else if (linkTags[i].getAttribute('rel') == 'apple-touch-startup-image' && linkTags[i].getAttribute('media').indexOf('640') != -1)
+            {
+                id('iphone4StartUpImageResult').innerHTML = good; continue;
+            }
+            else if (linkTags[i].getAttribute('rel') == 'icon')
+            {
+                id('faviconResult').innerHTML = good; continue;
+            }
+        }
+
+        id('validationResults').style.opacity = 1;
+        id('validationResults').style.height = '220px';
+    }
+
+    function onCloseValidation()
+    {
+        id('validationResults').style.opacity = 0;
+        id('validationResults').style.height = 0;
+        id('validateButton').innerHTML = 'Start';
+    }
+
+    // Utility functions
+
+    function id(name) { return document.getElementById(name); }
+
+    function getMobileAppWindow() { return window.frames[0]; }
+
+    window.onload = init;
+
+</script>
+
+</head>
+
+<body>
+
+<div id="reloadingNotification">reloading...</div>
+
+<div id="control-box">
+
+    <!-- Device Selection -->
+
+    <div class="tr">
+        <div class="td">Device</div>
+        <div class="td">
+            <select id="devices" onchange="onResizeScreen(this.value);">
+                <option value='{"w":320, "h":480}'>iPhone 3GS</option>
+                <!--<option value='{"w":640, "h":960}'>iPhone 4S</option>-->
+                <option value='{"w":480, "h":800}'>Nexus S</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Rotation -->
+
+    <div class="tr">
+        <div class="td">Rotation</div>
+        <div class="td">
+            <span id="screenRotationLabel">0&deg;</span>
+            <button onclick="onRotate();">Rotate</button>
+        </div>
+    </div>
+
+    <!-- Orientation -->
+
+    <div class="tr">
+        <div class="td"><label for="orientationToggle">Orientation</label></div>
+        <div class="td">
+            <input type="checkbox" id="orientationToggle" onclick="onToggleOrientation(this.checked);"/>
+            <div id="orientationControls" class="shade">
+                <!-- alpha -->
+                <div class="tr">
+                    <div class="td">alpha</div>
+                    <div class="td">
+                        <input type="range" min="0" max="359" step="1" value="0" id="alphaRange" onchange="updateAlpha(this.value);"/>
+                        <span id="alphaLabel">0&deg;</span>
+                    </div>
+                </div>
+                <!-- beta -->
+                <div class="tr">
+                    <div class="td">beta</div>
+                    <div class="td">
+                        <input type="range" min="0" max="359" step="1" value="180" id="betaRange" onchange="updateBeta(this.value);"/>
+                        <span id="betaLabel">0&deg;</span>
+                    </div>
+                </div>
+                <!-- gamma -->
+                <div class="tr">
+                    <div class="td">gamma</div>
+                    <div class="td">
+                        <input type="range" min="0" max="179" step="1" value="90" id="gammaRange" onchange="updateGamma(this.value);"/>
+                        <span id="gammaLabel">0&deg;</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validation -->
+    <div class="tr">
+        <div class="td">Validate</div>
+        <div class="td">
+            <button id="validateButton" onclick="onValidate();">Start</button>
+            <div id="validationResults" class="shade">
+                <div class="tr">
+                    <div class="td" id="manifestFileResult">&nbsp;</div>
+                    <div class="td">offline manifest file</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="webAppMetaTagResult">&nbsp;</div>
+                    <div class="td">web app META tag</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="viewPortMetaTagResult">&nbsp;</div>
+                    <div class="td">viewport META tag</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="statusBarMetaTagResult">&nbsp;</div>
+                    <div class="td">status bar META tag</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="icon57Result">&nbsp;</div>
+                    <div class="td">57x57 icon</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="icon72Result">&nbsp;</div>
+                    <div class="td">72x72 icon</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="icon114Result">&nbsp;</div>
+                    <div class="td">114x114 icon</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="ipadStartUpImageResult">&nbsp;</div>
+                    <div class="td">iPad start-up image</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="iphone3StartUpImageResult">&nbsp;</div>
+                    <div class="td">iPhone 3 start-up image</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="iphone4StartUpImageResult">&nbsp;</div>
+                    <div class="td">iPhone 4 start-up image</div>
+                </div>
+                <div class="tr">
+                    <div class="td" id="faviconResult">&nbsp;</div>
+                    <div class="td">favicon</div>
+                </div>
+                <div style="text-align: right"><a href="javascript:onCloseValidation();">close</a></div>
+            </div>
+        </div>
+    </div>
+    <!-- XXX -->
+    <!--<div class="tr">-->
+        <!--<div class="td">xxx</div>-->
+        <!--<div class="td">YYY-->
+        <!--</div>-->
+    <!--</div>-->
+</div>
+<iframe id="screen" width="300" height="300"/>
+
+</body>
+
+</html>
