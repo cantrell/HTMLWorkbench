@@ -9,7 +9,14 @@
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
         font-weight: 300;
         font-size: 15px;
+        color: #333;
+        /*background-image: url("background.png");*/
+        /*background-repeat: repeat;*/
+        /*-webkit-repeating-linear-gradient(0deg,  rgba(234, 234, 234, .5), rgba(234, 234, 234, .5) 1px, transparent 1px, transparent 16px),*/
+        /*-webkit-repeating-linear-gradient(90deg, rgba(234, 234, 234, .5), rgba(234, 234, 234, .5) 1px, transparent 1px, transparent 16px);*/
     }
+
+    a {text-decoration: none;}
 
     #screen
     {
@@ -28,6 +35,14 @@
 
     #validationResults {width:190px}
 
+    .fadable {-webkit-transition: opacity .5s ease-in}
+
+    #populateLocationLink {opacity: 0;}
+
+    .geoInput
+    {
+        width: 100px;
+    }
     .shade
     {
         -webkit-transition-property: opacity, height;
@@ -56,8 +71,9 @@
     var ORIENTATION_INTERVAL = 50;
 
     var screenProps = {
-        currentRotation: 0,
-        currentRotationDisplay: 0
+        currentRotation:        0,
+        currentRotationDisplay: 0,
+        dimensions:             null
     };
 
     var intervals = {orientationInterval: -1};
@@ -85,13 +101,44 @@
 
     function screenInit()
     {
-        getMobileAppWindow().orientation = 0;
+        var mobileApp = getMobileAppWindow();
+
+        mobileApp.orientation = 0;
+
+        var _assign = mobileApp.location.assign;
+        mobileApp.location.assign = function(url) {
+            if (url.indexOf('maps.google.com') != -1)
+            {
+                var queryString = url.substring(url.indexOf('?') + 1, url.length);
+                var params = queryString.split('&');
+                for (var i = 0; i < params.length; ++i)
+                {
+                    var name = params[i].substring(0, params[i].indexOf('='));
+                    var val = params[i].substring(params[i].indexOf('=') + 1, params[i].length);
+                    if (name == 'll')
+                    {
+                        var map = window.open('', 'map', 'width='+screenProps.dimensions.w+',height='+screenProps.dimensions.h+',menubar=0,resizable=0,scrollbars=no,status=0,titlebar=0,toolbar=0');
+                        map.document.open();
+                        map.document.write('<html><head><title>Map</title></head><body style="margin:0;overflow:hidden"><iframe width="' + screenProps.dimensions.w + '" height="' + screenProps.dimensions.h + '" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="http://maps.google.com/maps?q='+val+'&output=embed"></iframe></body></html>');
+                        map.document.close();
+                        var coords = getAbsoluteCoords(id('screen'));
+                        map.moveTo(coords.x, coords.y);
+                        map.focus();
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                _assign.call(mobileApp.location, url);
+            }
+        }
     }
 
     function loadMobileApp()
     {
         // TODO: Hardcode to index.html
-        getMobileAppWindow().location.href = 'index.html';
+        getMobileAppWindow().location.assign('index.html');
     }
 
     function setRotationTransition()
@@ -187,6 +234,24 @@
         }
     }
 
+    function onToggleGeolocation(val)
+    {
+        if (val)
+        {
+            id('geolocationControls').style.opacity = 1;
+            id('geolocationControls').style.height = '70px';
+            id('populateLocationLink').style.opacity = 1;
+            getMobileAppWindow().navigator.geolocation.getCurrentPosition = _getCurrentPosition;
+        }
+        else
+        {
+            id('geolocationControls').style.opacity = 0;
+            id('geolocationControls').style.height = '0';
+            id('populateLocationLink').style.opacity = 0;
+            getMobileAppWindow().navigator.geolocation.getCurrentPosition = window.navigator.geolocation.getCurrentPosition;
+        }
+    }
+
     function simulateOrientation()
     {
         var mobileApp = getMobileAppWindow();
@@ -196,7 +261,6 @@
         deviceOrientationEvent.beta  = id('betaRange').value;
         deviceOrientationEvent.gamma = id('gammaRange').value;
         deviceOrientationEvent.webkitCompassHeading = (360 - deviceOrientationEvent.alpha);
-        // TBD
         mobileApp.dispatchEvent(deviceOrientationEvent);
     }
 
@@ -212,68 +276,73 @@
         var good = '&#10003;';
         var bad = '&#10007;';
 
+        var goodColor = '#333';
+        var badColor = '#ff6699';
+
         // Manifest file
         var manifestFile = appWin.document.getElementsByTagName('html')[0].getAttribute('manifest');
+        id('manifestFileLabel').style.color = badColor;
         id('manifestFileResult').innerHTML = (!manifestFile) ? bad : good;
+        if (manifestFile) id('manifestFileLabel').style.color = goodColor;
 
         // META tags
         var metaTags = appWin.document.getElementsByTagName('meta');
-        id('webAppMetaTagResult').innerHTML = bad;
-        id('viewPortMetaTagResult').innerHTML = bad;
-        id('statusBarMetaTagResult').innerHTML = bad;
+        id('webAppMetaTagResult').innerHTML = bad;    id('webAppMetaTagLabel').style.color = badColor;
+        id('viewPortMetaTagResult').innerHTML = bad;  id('viewPortMetaTagLabel').style.color = badColor;
+        id('statusBarMetaTagResult').innerHTML = bad; id('statusBarMetaTagLabel').style.color = badColor;
         for (var i = 0; i < metaTags.length; ++i)
         {
             if (metaTags[i].getAttribute('name') == 'apple-mobile-web-app-capable')
             {
-                id('webAppMetaTagResult').innerHTML = good; continue;
+                id('webAppMetaTagResult').innerHTML = good; id('webAppMetaTagLabel').style.color = goodColor; continue;
             }
             else if (metaTags[i].getAttribute('name') == 'viewport')
             {
-                id('viewPortMetaTagResult').innerHTML = good; continue;
+                id('viewPortMetaTagResult').innerHTML = good; id('viewPortMetaTagLabel').style.color = goodColor; continue;
             }
             else if (metaTags[i].getAttribute('name') == 'apple-mobile-web-app-status-bar-style')
             {
-                id('statusBarMetaTagResult').innerHTML = good; continue;
+                id('statusBarMetaTagResult').innerHTML = good; id('statusBarMetaTagLabel').style.color = goodColor; continue;
             }
         }
 
         var linkTags = appWin.document.getElementsByTagName('link');
-        id('icon57Result').innerHTML              = bad;
-        id('icon72Result').innerHTML              = bad;
-        id('icon114Result').innerHTML             = bad;
-        id('ipadStartUpImageResult').innerHTML    = bad;
-        id('iphone3StartUpImageResult').innerHTML = bad;
-        id('iphone4StartUpImageResult').innerHTML = bad;
-        id('faviconResult').innerHTML             = bad;
+        id('icon57Result').innerHTML              = bad; id('icon57Label').style.color              = badColor;
+        id('icon72Result').innerHTML              = bad; id('icon72Label').style.color              = badColor;
+        id('icon114Result').innerHTML             = bad; id('icon114Label').style.color             = badColor;
+        id('ipadStartUpImageResult').innerHTML    = bad; id('ipadStartUpImageLabel').style.color    = badColor;
+        id('iphone3StartUpImageResult').innerHTML = bad; id('iphone3StartUpImageLabel').style.color = badColor;
+        id('iphone4StartUpImageResult').innerHTML = bad; id('iphone4StartUpImageLabel').style.color = badColor;
+        id('faviconResult').innerHTML             = bad; id('faviconLabel').style.color             = badColor;
         for (var i = 0; i < linkTags.length; ++i)
         {
             if (linkTags[i].getAttribute('rel') == 'apple-touch-icon' && linkTags[i].getAttribute('sizes') == '57x57')
             {
-                id('icon57Result').innerHTML = good; continue;
+                id('icon57Result').innerHTML = good; id('icon57Label').style.color = goodColor; continue;
             }
             else if (linkTags[i].getAttribute('rel') == 'apple-touch-icon' && linkTags[i].getAttribute('sizes') == '72x72')
             {
-                id('icon72Result').innerHTML = good; continue;
+                id('icon72Result').innerHTML = good; id('icon72Label').style.color = goodColor; continue;
             }
             else if (linkTags[i].getAttribute('rel') == 'apple-touch-icon' && linkTags[i].getAttribute('sizes') == '114x114')
             {
-                id('icon114Result').innerHTML = good; continue;
+                id('icon114Result').innerHTML = good; id('icon114Label').style.color = goodColor; continue;
             }
             else if (linkTags[i].getAttribute('rel') == 'apple-touch-startup-image' && linkTags[i].getAttribute('media').indexOf('481') != -1 && linkTags[i].getAttribute('media').indexOf('1024') != -1)
             {
-                id('ipadStartUpImageResult').innerHTML = good; continue;
+                id('ipadStartUpImageResult').innerHTML = good; id('ipadStartUpImageLabel').style.color = goodColor; continue;
             }
             else if (linkTags[i].getAttribute('rel') == 'apple-touch-startup-image' && linkTags[i].getAttribute('media').indexOf('320') != -1)
             {
-                id('iphone3StartUpImageResult').innerHTML = good; continue;
+                id('iphone3StartUpImageResult').innerHTML = good; id('iphone3StartUpImageLabel').style.color = goodColor; continue;
             }
             else if (linkTags[i].getAttribute('rel') == 'apple-touch-startup-image' && linkTags[i].getAttribute('media').indexOf('640') != -1)
             {
-                id('iphone4StartUpImageResult').innerHTML = good; continue;
+                id('iphone4StartUpImageResult').innerHTML = good; id('iphone4StartUpImageLabel').style.color = goodColor; continue;
             }
             else if (linkTags[i].getAttribute('rel') == 'icon')
             {
-                id('faviconResult').innerHTML = good; continue;
+                id('faviconResult').innerHTML = good; id('faviconLabel').style.color = goodColor; continue;
             }
         }
 
@@ -288,11 +357,49 @@
         id('validateButton').innerHTML = 'Start';
     }
 
+    function populateLocation()
+    {
+        var geo = navigator.geolocation;
+        if (!geo)
+        {
+            alert('Cannot determine location.');
+            return;
+        }
+        geo.getCurrentPosition(onPosition);
+    }
+
+    function onPosition(position)
+    {
+        id('latInput').value  = position.coords.latitude;
+        id('longInput').value = position.coords.longitude;
+        id('altInput').value  = (position.coords.altitude != null) ? position.coords.altitude : 0 ;
+    }
+
+    function _getCurrentPosition(callback)
+    {
+        var position = {
+            coords: {
+                longitude: id('longInput').value,
+                latitude:  id('latInput').value,
+                altitude:  id('altInput').value
+            }
+        }
+        callback.call(_getCurrentPosition, position);
+    }
+
     // Utility functions
 
     function id(name) { return document.getElementById(name); }
 
     function getMobileAppWindow() { return window.frames[0]; }
+
+    function getAbsoluteCoords(element)
+    {
+        var coords = {};
+        coords.x = window.screenX + element.offsetLeft;
+        coords.y = window.screenY + element.offsetTop + ((window.outerHeight - window.innerHeight) / 2);
+        return coords;
+    }
 
     window.onload = init;
 
@@ -364,6 +471,39 @@
         </div>
     </div>
 
+    <!-- Geolocation -->
+
+    <div class="tr">
+        <div class="td"><label for="geolocationToggle">Geolocation</label></div>
+        <div class="td">
+            <input type="checkbox" id="geolocationToggle" onclick="onToggleGeolocation(this.checked);"/>
+            <span class="fadable" id="populateLocationLink"><a href="javascript:populateLocation();">populate with current location</a></span>
+            <div id="geolocationControls" class="shade">
+                <!-- Latitude -->
+                <div class="tr">
+                    <div class="td">latitude</div>
+                    <div class="td">
+                        <input type="text" id="latInput" class="geoInput"/>
+                    </div>
+                </div>
+                <!-- Longitude -->
+                <div class="tr">
+                    <div class="td">longitude</div>
+                    <div class="td">
+                        <input type="text" id="longInput" class="geoInput"/>
+                    </div>
+                </div>
+                <!-- Altitude -->
+                <div class="tr">
+                    <div class="td">altitude</div>
+                    <div class="td">
+                        <input type="text" id="altInput" class="geoInput"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Validation -->
     <div class="tr">
         <div class="td">Validate</div>
@@ -372,47 +512,47 @@
             <div id="validationResults" class="shade">
                 <div class="tr">
                     <div class="td" id="manifestFileResult">&nbsp;</div>
-                    <div class="td">offline manifest file</div>
+                    <div class="td" id="manifestFileLabel">offline manifest file</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="webAppMetaTagResult">&nbsp;</div>
-                    <div class="td">web app META tag</div>
+                    <div class="td" id="webAppMetaTagLabel">web app META tag</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="viewPortMetaTagResult">&nbsp;</div>
-                    <div class="td">viewport META tag</div>
+                    <div class="td" id="viewPortMetaTagLabel">viewport META tag</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="statusBarMetaTagResult">&nbsp;</div>
-                    <div class="td">status bar META tag</div>
+                    <div class="td" id="statusBarMetaTagLabel">status bar META tag</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="icon57Result">&nbsp;</div>
-                    <div class="td">57x57 icon</div>
+                    <div class="td" id="icon57Label">57x57 icon</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="icon72Result">&nbsp;</div>
-                    <div class="td">72x72 icon</div>
+                    <div class="td" id="icon72Label">72x72 icon</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="icon114Result">&nbsp;</div>
-                    <div class="td">114x114 icon</div>
+                    <div class="td" id="icon114Label">114x114 icon</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="ipadStartUpImageResult">&nbsp;</div>
-                    <div class="td">iPad start-up image</div>
+                    <div class="td" id="ipadStartUpImageLabel">iPad start-up image</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="iphone3StartUpImageResult">&nbsp;</div>
-                    <div class="td">iPhone 3 start-up image</div>
+                    <div class="td" id="iphone3StartUpImageLabel">iPhone 3 start-up image</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="iphone4StartUpImageResult">&nbsp;</div>
-                    <div class="td">iPhone 4 start-up image</div>
+                    <div class="td" id="iphone4StartUpImageLabel">iPhone 4 start-up image</div>
                 </div>
                 <div class="tr">
                     <div class="td" id="faviconResult">&nbsp;</div>
-                    <div class="td">favicon</div>
+                    <div class="td" id="faviconLabel">favicon</div>
                 </div>
                 <div style="text-align: right"><a href="javascript:onCloseValidation();">close</a></div>
             </div>
