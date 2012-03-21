@@ -258,8 +258,8 @@
         var deviceOrientationEvent = mobileApp.document.createEvent('Event');
         deviceOrientationEvent.initEvent('deviceorientation', true, true);
         deviceOrientationEvent.alpha = id('alphaRange').value;
-        deviceOrientationEvent.beta  = id('betaRange').value;
-        deviceOrientationEvent.gamma = id('gammaRange').value;
+        deviceOrientationEvent.beta  = id('betaRange').value - 180;
+        deviceOrientationEvent.gamma = id('gammaRange').value - 90;
         deviceOrientationEvent.webkitCompassHeading = (360 - deviceOrientationEvent.alpha);
         mobileApp.dispatchEvent(deviceOrientationEvent);
     }
@@ -420,7 +420,8 @@
         <div class="td">
             <select id="devices" onchange="onResizeScreen(this.value);">
                 <option value='{"w":320, "h":480}'>iPhone 3GS</option>
-                <!--<option value='{"w":640, "h":960}'>iPhone 4S</option>-->
+                <option value='{"w":640, "h":960}'>iPhone 4S</option>
+                <option value='{"w":720, "h":1280}'>Galaxy Nexus</option>
                 <option value='{"w":480, "h":800}'>Nexus S</option>
             </select>
         </div>
